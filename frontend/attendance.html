@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Attendance</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <div class="container">
+    <h4 class="mb-3" id="page-title">Attendance</h4>
+
+    <div class="card nf-card p-3 mb-3 d-none" id="checkin-card">
+      <h6>Mark Attendance</h6>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success btn-sm" onclick="doCheckIn()">Check In</button>
+        <button class="btn btn-secondary btn-sm" onclick="doCheckOut()">Check Out</button>
+      </div>
+    </div>
+
+    <div class="card nf-card p-3">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th id="col-name">Employee</th>
+            <th>Date</th>
+            <th>Check In</th>
+            <th>Check Out</th>
+          </tr>
+        </thead>
+        <tbody id="attendance-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/navbar.js"></script>
+  <script>
+    const currentUser = requireAuth(["OWNER", "MANAGER", "EMPLOYEE"]);
+    renderNavbar("attendance.html");
+
+    function fmt(dt) {
+      if (!dt) return "-";
+      return new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    async function loadAttendance() {
+      try {
+        let records = [];
+        let showNameColumn = false;
+
+        if (currentUser.role === "EMPLOYEE") {
+          document.getElementById("checkin-card").classList.remove("d-none");
+          document.getElementById("page-title").textContent = "My Attendance";
+          document.getElementById("col-name").classList.add("d-none");
+          records = await apiRequest("/api/attendance/me");
+        } else if (currentUser.role === "OWNER") {
+          document.getElementById("page-title").textContent = "All Attendance";
+          showNameColumn = true;
+          records = await apiRequest("/api/attendance/all");
+        } else {
+          // Manager: aggregate attendance across their team
+          document.getElementById("page-title").textContent = "Team Attendance";
+          showNameColumn = true;
+          const team = await apiRequest("/api/users/employees");
+          for (const emp of team) {
+            const empRecords = await apiRequest(`/api/attendance/user/${emp.id}`);
+            records.push(...empRecords.map(r => ({ ...r, user: emp })));
+          }
+        }
+
+        const tbody = document.getElementById("attendance-table-body");
+        tbody.innerHTML = records.map(r => `
+          <tr>
+            ${showNameColumn ? `<td>${r.user ? r.user.name : "-"}</td>` : ""}
+            <td>${r.date}</td>
+            <td>${fmt(r.checkIn)}</td>
+            <td>${fmt(r.checkOut)}</td>
+          </tr>
+        `).join("");
+      } catch (err) { showError(err.message); }
+    }
+
+    async function doCheckIn() {
+      try {
+        await apiRequest("/api/attendance/check-in", "POST");
+        alert("Checked in successfully");
+        loadAttendance();
+      } catch (err) { showError(err.message); }
+    }
+
+    async function doCheckOut() {
+      try {
+        await apiRequest("/api/attendance/check-out", "POST");
+        alert("Checked out successfully");
+        loadAttendance();
+      } catch (err) { showError(err.message); }
+    }
+
+    loadAttendance();
+  </script>
+</body>
+</html>

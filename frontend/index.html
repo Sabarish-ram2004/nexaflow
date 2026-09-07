@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Login</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="card login-card shadow p-4">
+      <div class="card-body">
+        <h3 class="text-center mb-1 fw-bold" style="color: var(--nf-primary);">NexaFlow</h3>
+        <p class="text-center text-muted mb-4">Employee & Organization Management</p>
+
+        <div id="error-box" class="alert alert-danger d-none"></div>
+
+        <form id="loginForm">
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" required placeholder="you@nexaflow.com">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-primary w-100" style="background-color: var(--nf-primary); border:none;">Login</button>
+        </form>
+
+        <p class="text-center text-muted mt-3 mb-0" style="font-size: 0.8rem;">
+          First time? Default Owner login is seeded from the backend config.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    // If already logged in, skip login page
+    const existingUser = getCurrentUser();
+    if (existingUser) window.location.href = dashboardUrlForRole(existingUser.role);
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const errorBox = document.getElementById("error-box");
+      errorBox.classList.add("d-none");
+
+      try {
+        const data = await apiRequest("/api/auth/login", "POST", { email, password });
+        localStorage.setItem("nf_token", data.token);
+        localStorage.setItem("nf_user", JSON.stringify({
+          id: data.userId, name: data.name, email: data.email, role: data.role
+        }));
+        window.location.href = dashboardUrlForRole(data.role);
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.remove("d-none");
+      }
+    });
+  </script>
+</body>
+</html>

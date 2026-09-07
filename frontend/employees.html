@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Employees</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 id="page-title">Employees</h4>
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">+ Add Employee</button>
+    </div>
+
+    <div class="card nf-card p-3">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Manager</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="employee-table-body">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add Employee Modal -->
+  <div class="modal fade" id="addEmployeeModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Employee</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="addEmployeeForm">
+            <div class="mb-2">
+              <label class="form-label">Name</label>
+              <input type="text" class="form-control" id="emp-name" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" id="emp-email" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Temporary Password</label>
+              <input type="text" class="form-control" id="emp-password" required>
+            </div>
+            <div class="mb-2" id="manager-select-wrapper">
+              <label class="form-label">Assign to Manager (optional, Owner only)</label>
+              <select class="form-select" id="emp-manager"></select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Create Employee</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assign Manager Modal -->
+  <div class="modal fade" id="assignManagerModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Assign Employee to Manager</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="assign-employee-id">
+          <div class="mb-2">
+            <label class="form-label">Select Manager</label>
+            <select class="form-select" id="assign-manager-select"></select>
+          </div>
+          <button class="btn btn-primary w-100" onclick="confirmAssign()">Assign</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/navbar.js"></script>
+  <script>
+    const currentUser = requireAuth(["OWNER", "MANAGER"]);
+    renderNavbar("employees.html");
+    document.getElementById("page-title").textContent = currentUser.role === "OWNER" ? "All Employees" : "My Team";
+
+    if (currentUser.role !== "OWNER") {
+      document.getElementById("manager-select-wrapper").classList.add("d-none");
+    }
+
+    async function loadEmployees() {
+      try {
+        const employees = await apiRequest("/api/users/employees");
+        const tbody = document.getElementById("employee-table-body");
+        tbody.innerHTML = employees.map(e => `
+          <tr>
+            <td>${e.name}</td>
+            <td>${e.email}</td>
+            <td>${e.managerId ? "Manager #" + e.managerId : "-"}</td>
+            <td>${e.active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}</td>
+            <td>
+              ${currentUser.role === "OWNER" ? `
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="openAssign(${e.id})">Assign</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deactivate(${e.id})">Deactivate</button>
+              ` : ""}
+            </td>
+          </tr>
+        `).join("");
+      } catch (err) { showError(err.message); }
+    }
+
+    async function loadManagersForDropdown() {
+      if (currentUser.role !== "OWNER") return;
+      try {
+        const managers = await apiRequest("/api/users/managers");
+        const select = document.getElementById("emp-manager");
+        select.innerHTML = '<option value="">Unassigned</option>' +
+          managers.map(m => `<option value="${m.id}">${m.name}</option>`).join("");
+      } catch (err) { showError(err.message); }
+    }
+
+    // Re-fetch every time the modal is opened, instead of only once at page load,
+    // so the dropdown is never stale or empty due to a load-order race.
+    const addEmployeeModalEl = document.getElementById("addEmployeeModal");
+    if (addEmployeeModalEl && currentUser.role === "OWNER") {
+      addEmployeeModalEl.addEventListener("show.bs.modal", loadManagersForDropdown);
+    }
+    async function deactivate(id) {
+      if (!confirm("Deactivate this employee?")) return;
+      try {
+        await apiRequest(`/api/users/${id}/deactivate`, "PUT");
+        loadEmployees();
+      } catch (err) { showError(err.message); }
+    }
+
+    document.getElementById("addEmployeeForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById("emp-name").value,
+        email: document.getElementById("emp-email").value,
+        password: document.getElementById("emp-password").value,
+      };
+      const managerId = document.getElementById("emp-manager") ? document.getElementById("emp-manager").value : null;
+      if (managerId) payload.managerId = Number(managerId);
+
+      try {
+        await apiRequest("/api/users/employees", "POST", payload);
+        bootstrap.Modal.getInstance(document.getElementById("addEmployeeModal")).hide();
+        e.target.reset();
+        loadEmployees();
+      } catch (err) { showError(err.message); }
+    });
+
+    let assignModal;
+    async function openAssign(employeeId) {
+      document.getElementById("assign-employee-id").value = employeeId;
+      try {
+        const managers = await apiRequest("/api/users/managers");
+        document.getElementById("assign-manager-select").innerHTML =
+          managers.map(m => `<option value="${m.id}">${m.name}</option>`).join("");
+        assignModal = new bootstrap.Modal(document.getElementById("assignManagerModal"));
+        assignModal.show();
+      } catch (err) { showError(err.message); }
+    }
+
+    async function confirmAssign() {
+      const employeeId = document.getElementById("assign-employee-id").value;
+      const managerId = document.getElementById("assign-manager-select").value;
+      try {
+        await apiRequest(`/api/users/${employeeId}/assign-manager/${managerId}`, "PUT");
+        assignModal.hide();
+        loadEmployees();
+      } catch (err) { showError(err.message); }
+    }
+
+    loadEmployees();
+    loadManagersForDropdown();
+  </script>
+</body>
+</html>

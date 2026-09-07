@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Tasks</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 id="page-title">Tasks</h4>
+      <button class="btn btn-primary btn-sm d-none" id="add-task-btn" data-bs-toggle="modal" data-bs-target="#addTaskModal">+ Assign Task</button>
+    </div>
+
+    <div class="card nf-card p-3">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Assigned To</th>
+            <th>Priority</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="task-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add Task Modal -->
+  <div class="modal fade" id="addTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Assign New Task</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="addTaskForm">
+            <div class="mb-2">
+              <label class="form-label">Assign To</label>
+              <select class="form-select" id="task-employee" required></select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Title</label>
+              <input type="text" class="form-control" id="task-title" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Description</label>
+              <textarea class="form-control" id="task-description"></textarea>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Priority</label>
+              <select class="form-select" id="task-priority">
+                <option value="LOW">Low</option>
+                <option value="MEDIUM" selected>Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Due Date</label>
+              <input type="date" class="form-control" id="task-due-date">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Assign Task</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/navbar.js"></script>
+  <script>
+    const currentUser = requireAuth(["OWNER", "MANAGER", "EMPLOYEE"]);
+    renderNavbar("tasks.html");
+
+    if (currentUser.role === "EMPLOYEE") {
+      document.getElementById("page-title").textContent = "My Tasks";
+    } else {
+      document.getElementById("add-task-btn").classList.remove("d-none");
+    }
+
+    function statusBadge(status) {
+      const map = { TODO: "secondary", IN_PROGRESS: "warning", COMPLETED: "success" };
+      return `<span class="badge bg-${map[status] || "secondary"}">${status}</span>`;
+    }
+
+    async function loadTasks() {
+      try {
+        const tasks = await apiRequest("/api/tasks");
+        const tbody = document.getElementById("task-table-body");
+        tbody.innerHTML = tasks.map(t => `
+          <tr>
+            <td>${t.title}</td>
+            <td>${t.assignedTo ? t.assignedTo.name : "-"}</td>
+            <td>${t.priority}</td>
+            <td>${t.dueDate || "-"}</td>
+            <td>${statusBadge(t.status)}</td>
+            <td>
+              ${currentUser.role === "EMPLOYEE" ? renderStatusControls(t) : ""}
+            </td>
+          </tr>
+        `).join("");
+      } catch (err) { showError(err.message); }
+    }
+
+    function renderStatusControls(task) {
+      if (task.status === "COMPLETED") return "-";
+      const nextStatus = task.status === "TODO" ? "IN_PROGRESS" : "COMPLETED";
+      const label = task.status === "TODO" ? "Start" : "Mark Complete";
+      return `<button class="btn btn-sm btn-outline-primary" onclick="updateStatus(${task.id}, '${nextStatus}')">${label}</button>`;
+    }
+
+    async function updateStatus(taskId, status) {
+      try {
+        await apiRequest(`/api/tasks/${taskId}/status`, "PUT", { status });
+        loadTasks();
+      } catch (err) { showError(err.message); }
+    }
+
+    async function loadEmployeesForDropdown() {
+      if (currentUser.role === "EMPLOYEE") return;
+      const select = document.getElementById("task-employee");
+      select.innerHTML = `<option value="">Loading...</option>`;
+      try {
+        const employees = await apiRequest("/api/users/employees");
+        if (employees.length === 0) {
+          select.innerHTML = `<option value="">No employees yet — create one first</option>`;
+          return;
+        }
+        select.innerHTML = employees.map(e => `<option value="${e.id}">${e.name}</option>`).join("");
+      } catch (err) {
+        select.innerHTML = `<option value="">Failed to load employees</option>`;
+        showError(err.message);
+      }
+    }
+
+    // Re-fetch every time the modal is opened, instead of only once at page load,
+    // so the dropdown is never stale or empty due to a load-order race.
+    const addTaskModalEl = document.getElementById("addTaskModal");
+    if (addTaskModalEl) {
+      addTaskModalEl.addEventListener("show.bs.modal", loadEmployeesForDropdown);
+    }
+
+    const addTaskForm = document.getElementById("addTaskForm");
+    if (addTaskForm) {
+      addTaskForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const employeeId = document.getElementById("task-employee").value;
+        const payload = {
+          title: document.getElementById("task-title").value,
+          description: document.getElementById("task-description").value,
+          priority: document.getElementById("task-priority").value,
+          dueDate: document.getElementById("task-due-date").value || null,
+        };
+        try {
+          await apiRequest(`/api/tasks/assign/${employeeId}`, "POST", payload);
+          bootstrap.Modal.getInstance(document.getElementById("addTaskModal")).hide();
+          e.target.reset();
+          loadTasks();
+        } catch (err) { showError(err.message); }
+      });
+    }
+
+    loadTasks();
+  </script>
+</body>
+</html>

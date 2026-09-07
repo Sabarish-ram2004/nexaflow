@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Employee Dashboard</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <div class="container">
+    <h4 class="mb-4">My Dashboard</h4>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <div class="nf-stat-card bg-nf-1">
+          <div>My Tasks</div>
+          <h2 id="stat-tasks">-</h2>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="nf-stat-card bg-nf-2">
+          <div>Attendance Days</div>
+          <h2 id="stat-attendance">-</h2>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="nf-stat-card bg-nf-3">
+          <div>Leave Requests</div>
+          <h2 id="stat-leaves">-</h2>
+        </div>
+      </div>
+    </div>
+
+    <div class="card nf-card p-3 mb-3">
+      <h6>Attendance</h6>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success btn-sm" onclick="doCheckIn()">Check In</button>
+        <button class="btn btn-secondary btn-sm" onclick="doCheckOut()">Check Out</button>
+      </div>
+    </div>
+
+    <div class="card nf-card p-3">
+      <h6>Quick links</h6>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="tasks.html" class="btn btn-outline-primary btn-sm">My Tasks</a>
+        <a href="attendance.html" class="btn btn-outline-primary btn-sm">My Attendance</a>
+        <a href="leave.html" class="btn btn-outline-primary btn-sm">Apply / View Leave</a>
+        <a href="profile.html" class="btn btn-outline-primary btn-sm">My Profile</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/navbar.js"></script>
+  <script>
+    requireAuth(["EMPLOYEE"]);
+    renderNavbar("employee-dashboard.html");
+
+    async function loadStats() {
+      try {
+        const tasks = await apiRequest("/api/tasks");
+        document.getElementById("stat-tasks").textContent = tasks.length;
+
+        const attendance = await apiRequest("/api/attendance/me");
+        document.getElementById("stat-attendance").textContent = attendance.length;
+
+        const leaves = await apiRequest("/api/leave/me");
+        document.getElementById("stat-leaves").textContent = leaves.length;
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function doCheckIn() {
+      try {
+        await apiRequest("/api/attendance/check-in", "POST");
+        alert("Checked in successfully");
+        loadStats();
+      } catch (err) { showError(err.message); }
+    }
+
+    async function doCheckOut() {
+      try {
+        await apiRequest("/api/attendance/check-out", "POST");
+        alert("Checked out successfully");
+        loadStats();
+      } catch (err) { showError(err.message); }
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>

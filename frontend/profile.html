@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Profile</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <div class="container">
+    <h4 class="mb-3">My Profile</h4>
+
+    <div class="card nf-card p-4" style="max-width: 500px;">
+      <form id="profileForm">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="profile-name" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="profile-email" disabled>
+          <div class="form-text">Email cannot be changed.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Role</label>
+          <input type="text" class="form-control" id="profile-role" disabled>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/navbar.js"></script>
+  <script>
+    const currentUser = requireAuth();
+    renderNavbar("profile.html");
+
+    async function loadProfile() {
+      try {
+        const me = await apiRequest("/api/users/me");
+        document.getElementById("profile-name").value = me.name;
+        document.getElementById("profile-email").value = me.email;
+        document.getElementById("profile-role").value = me.role;
+      } catch (err) { showError(err.message); }
+    }
+
+    document.getElementById("profileForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await apiRequest(`/api/users/${currentUser.id}`, "PUT", {
+          name: document.getElementById("profile-name").value,
+          email: document.getElementById("profile-email").value,
+          password: "unchanged", // backend ignores password on update; required only by DTO shape
+        });
+        alert("Profile updated");
+
+        // keep localStorage in sync so navbar shows the new name immediately
+        const updatedUser = { ...currentUser, name: document.getElementById("profile-name").value };
+        localStorage.setItem("nf_user", JSON.stringify(updatedUser));
+        renderNavbar("profile.html");
+      } catch (err) { showError(err.message); }
+    });
+
+    loadProfile();
+  </script>
+</body>
+</html>

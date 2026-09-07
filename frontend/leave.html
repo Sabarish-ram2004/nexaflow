@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexaFlow - Leave</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 id="page-title">Leave</h4>
+      <button class="btn btn-primary btn-sm d-none" id="apply-leave-btn" data-bs-toggle="modal" data-bs-target="#applyLeaveModal">+ Apply Leave</button>
+    </div>
+
+    <div class="card nf-card p-3">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th id="col-name">Employee</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="leave-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Apply Leave Modal -->
+  <div class="modal fade" id="applyLeaveModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Apply for Leave</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="applyLeaveForm">
+            <div class="mb-2">
+              <label class="form-label">Start Date</label>
+              <input type="date" class="form-control" id="leave-start" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">End Date</label>
+              <input type="date" class="form-control" id="leave-end" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Reason</label>
+              <textarea class="form-control" id="leave-reason"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Submit Request</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/navbar.js"></script>
+  <script>
+    const currentUser = requireAuth(["OWNER", "MANAGER", "EMPLOYEE"]);
+    renderNavbar("leave.html");
+
+    if (currentUser.role === "EMPLOYEE") {
+      document.getElementById("page-title").textContent = "My Leave Requests";
+      document.getElementById("apply-leave-btn").classList.remove("d-none");
+      document.getElementById("col-name").classList.add("d-none");
+    } else {
+      document.getElementById("page-title").textContent = "Leave Requests";
+    }
+
+    function statusBadge(status) {
+      const map = { PENDING: "warning", APPROVED: "success", REJECTED: "danger" };
+      return `<span class="badge bg-${map[status] || "secondary"}">${status}</span>`;
+    }
+
+    async function loadLeave() {
+      try {
+        const endpoint = currentUser.role === "EMPLOYEE" ? "/api/leave/me" : "/api/leave/pending";
+        const leaves = await apiRequest(endpoint);
+        const showNameColumn = currentUser.role !== "EMPLOYEE";
+
+        const tbody = document.getElementById("leave-table-body");
+        tbody.innerHTML = leaves.map(l => `
+          <tr>
+            ${showNameColumn ? `<td>${l.user ? l.user.name : "-"}</td>` : ""}
+            <td>${l.startDate}</td>
+            <td>${l.endDate}</td>
+            <td>${l.reason || "-"}</td>
+            <td>${statusBadge(l.status)}</td>
+            <td>${showNameColumn && l.status === "PENDING" ? `
+              <button class="btn btn-sm btn-outline-success me-1" onclick="review(${l.id}, 'APPROVED')">Approve</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="review(${l.id}, 'REJECTED')">Reject</button>
+            ` : "-"}</td>
+          </tr>
+        `).join("");
+      } catch (err) { showError(err.message); }
+    }
+
+    async function review(id, status) {
+      try {
+        await apiRequest(`/api/leave/${id}/review`, "PUT", { status });
+        loadLeave();
+      } catch (err) { showError(err.message); }
+    }
+
+    const applyLeaveForm = document.getElementById("applyLeaveForm");
+    if (applyLeaveForm) {
+      applyLeaveForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+          startDate: document.getElementById("leave-start").value,
+          endDate: document.getElementById("leave-end").value,
+          reason: document.getElementById("leave-reason").value,
+        };
+        try {
+          await apiRequest("/api/leave", "POST", payload);
+          bootstrap.Modal.getInstance(document.getElementById("applyLeaveModal")).hide();
+          e.target.reset();
+          loadLeave();
+        } catch (err) { showError(err.message); }
+      });
+    }
+
+    loadLeave();
+  </script>
+</body>
+</html>
