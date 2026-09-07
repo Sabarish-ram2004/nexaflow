@@ -10,7 +10,7 @@ A full-stack RBAC-based employee management system with three roles: **OWNER**, 
 ## Project structure
 ```
 nexaflow/
-├── backend/      Spring Boot project (open in IntelliJ)
+├── backend/      Spring Boot project 
 ├── frontend/     Static HTML/CSS/JS site
 └── db/           schema.sql (reference only — Hibernate creates tables automatically)
 ```
