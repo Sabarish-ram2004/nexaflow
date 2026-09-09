@@ -1,5 +1,5 @@
 // Base URL of the Spring Boot backend
-const API_BASE = "http://localhost:8080";
+const API_BASE = "https://nexaflow-backend-8dcj.onrender.com";
 
 // Central fetch wrapper: attaches JWT token automatically and handles errors consistently
 async function apiRequest(path, method = "GET", body = null) {
