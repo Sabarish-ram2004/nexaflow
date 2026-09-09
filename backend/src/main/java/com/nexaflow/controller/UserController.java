@@ -66,6 +66,6 @@ public class UserController {
 
     @GetMapping("/me")
     public User getCurrentUserProfile() {
-        return SecurityUtils.getCurrentUser();
+        return userService.getUserOrThrow(SecurityUtils.getCurrentUser().getId());
     }
 }
