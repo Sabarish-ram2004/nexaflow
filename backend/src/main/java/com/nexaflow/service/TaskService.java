@@ -35,7 +35,8 @@ public class TaskService {
         }
 
         task.setAssignedTo(employee);
-        task.setCreatedBy(currentUser);
+        User managedCreator = userService.getUserOrThrow(currentUser.getId());
+        task.setCreatedBy(managedCreator);
         if (task.getStatus() == null) task.setStatus(TaskStatus.TODO);
 
         Task saved = taskRepository.save(task);

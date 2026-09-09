@@ -21,8 +21,12 @@ public class LeaveRequestService {
     @Autowired
     private AuditService auditService;
 
+    @Autowired
+    private UserService userService;
+
     public LeaveRequest applyLeave(LeaveRequest request, User currentUser) {
-        request.setUser(currentUser);
+        User managedUser = userService.getUserOrThrow(currentUser.getId());
+        request.setUser(managedUser);
         request.setStatus(LeaveStatus.PENDING);
         return leaveRequestRepository.save(request);
     }
@@ -60,7 +64,8 @@ public class LeaveRequestService {
         }
 
         leave.setStatus(decision);
-        leave.setReviewedBy(currentUser);
+        User managedReviewer = userService.getUserOrThrow(currentUser.getId());
+        leave.setReviewedBy(managedReviewer);
         LeaveRequest saved = leaveRequestRepository.save(leave);
         auditService.log(currentUser.getEmail(), "REVIEW_LEAVE", "Leave id=" + leaveId + " -> " + decision);
         return saved;

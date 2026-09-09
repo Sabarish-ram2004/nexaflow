@@ -29,7 +29,8 @@ public class AttendanceService {
             throw new IllegalArgumentException("You have already checked in today");
         }
         Attendance attendance = existing != null ? existing : new Attendance();
-        attendance.setUser(currentUser);
+        User managedUser = userService.getUserOrThrow(currentUser.getId());
+        attendance.setUser(managedUser);
         attendance.setDate(today);
         attendance.setCheckIn(LocalDateTime.now());
         return attendanceRepository.save(attendance);
